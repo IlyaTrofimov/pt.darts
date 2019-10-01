@@ -59,8 +59,8 @@ class Architect():
         """
         # compute gradient
 
-        def ddot(a, b):
-           return sum(u.flatten() @ v.flatten() for u, v in zip(a, b))
+        # def ddot(a, b):
+        #    return sum(u.flatten() @ v.flatten() for u, v in zip(a, b))
 
         if self.hessian_vector_type in [0, 1, 2]:
             # do virtual step (calc w`)
@@ -86,71 +86,71 @@ class Architect():
         #
         elif self.hessian_vector_type == 2:
             tr_loss = self.net.loss(trn_X, trn_y) # L_train(w)
-            grad_L_train_w = torch.autograd.grad(tr_loss, self.net.weights(), create_graph = True)
-            grad_vector = ddot(grad_L_train_w, dw)
 
-            hessian_vector = torch.autograd.grad(grad_vector, self.net.alphas(), retain_graph = False)
+            grad_L_train_w = torch.autograd.grad(tr_loss, self.net.weights(), create_graph = True)
+
+            hessian_vector = torch.autograd.grad(grad_L_train_w, self.net.alphas(),
+                                                 grad_outputs = dw, retain_graph = False)
 
         #
-        # HOAG (hessian * inverse_hessian * grad)
+        # HOAG (train_hessian_aw * inverse_train_hessian_ww * test_grad_w)
         #
         elif self.hessian_vector_type == 3:
-            # calc unrolled loss
-            val_loss = self.net.loss(val_X, val_y) # L_val(w)
+            def flatten(t):  # No .cpu()
+                return torch.cat([x.flatten() for x in t], dim=0)
 
-            # compute gradient
             v_alphas = tuple(self.net.alphas())
             v_weights = tuple(self.net.weights())
-            v_grads = torch.autograd.grad(val_loss, v_alphas + v_weights)
-            dalpha = v_grads[:len(v_alphas)] # d_a L_val
-            dw = v_grads[len(v_alphas):]     # d_w L_val
 
-            tr_loss = self.net.loss(trn_X, trn_y) # L_train(w)
-            grad_L_train_w = torch.autograd.grad(tr_loss, self.net.weights(), create_graph = True)
+            # step 1. calc test alpha- and weight-grad
+            val_loss = self.net.loss(val_X, val_y)  # L_val(w)
+            val_grad = torch.autograd.grad(
+                val_loss,
+                v_alphas + v_weights,
+                create_graph=False)
 
-            device = tr_loss.device
+            val_grad_a = val_grad[:len(v_alphas)]                    # d_a L_val
+            val_grad_w = flatten(val_grad[len(v_alphas):]).double()  # d_w L_val
 
-            N = sum([x.numel() for x in dw])
-
-            def to_flat(t):
-                return torch.cat([x.flatten().cpu() for x in t], 0)
+            # step 2. cg on the train weight-hessian and test weight-grad
+            trn_loss = self.net.loss(trn_X, trn_y)  # L_train(w)
+            trn_grad_w = flatten(torch.autograd.grad(
+                trn_loss,
+                v_weights,
+                create_graph=True)) # d_w L_train(w)
 
             def calc_huge_hessian_vector(z):
+                return flatten(torch.autograd.grad(
+                    trn_grad_w,
+                    v_weights,
+                    grad_outputs=torch.from_numpy(z).to(trn_grad_w),
+                    retain_graph=True)
+                ).cpu()
 
-                grad_vector = 0
-                idx = 0
-                z_pt = torch.Tensor(z).to(device)
-                items = []
+            LinOp = LinearOperator(
+                (len(trn_grad_w), len(trn_grad_w)),
+                matvec=calc_huge_hessian_vector,
+                dtype=np.dtype('float64'))
 
-                tr_loss = self.net.loss(trn_X, trn_y) # L_train(w)
-                grad_L_train_w = torch.autograd.grad(tr_loss, self.net.weights(), create_graph = True) # d_w L_train(w)
+            # why these tol and maxiter?
+            inv_hess_vect, info = cg(LinOp, val_grad_w.cpu().numpy(), tol=1e-3, maxiter=5)
+            inv_hess_vect = torch.from_numpy(inv_hess_vect).to(trn_grad_w)
 
-                for elem in grad_L_train_w:
-                    grad_vector += elem.flatten() @ z_pt[idx : idx + elem.numel()]
-                    idx += elem.numel()
+            # step 3. get \nabla^2_{\alpha\omega} L_train(\omega^*(\alpha), \alpha) q
+            # Supply `grad()` with `q` as the `grad_outputs` for
+            #  the Jacobian-vector product (see grad's docs).
+            if True:
+                hessian_vector = torch.autograd.grad(
+                    trn_grad_w,
+                    v_alphas,
+                    grad_outputs=inv_hess_vect,
+                    retain_graph=False)
 
-                huge_hessian_vector = torch.autograd.grad(grad_vector, self.net.weights(), retain_graph = False)
+            else:
+                hessian_vector = self.compute_hessian_vector(inv_hess_vect, trn_X, trn_y)
 
-                return to_flat(huge_hessian_vector)
+            dalpha = val_grad_a
 
-            LinOp = LinearOperator((N, N), matvec = calc_huge_hessian_vector, dtype = np.dtype('float64'))
-
-            inv_hessian_vector = cg(LinOp, to_flat(dw), tol = 1e-3, maxiter = 5)[0]
-            inv_hessian_vector = torch.Tensor(inv_hessian_vector).to(device)
-
-            #
-            #  Restore tensor dimensions
-            #
-            inv_hessian_vector_torch = []
-            idx = 0
-
-            for elem in dw:
-                n = elem.numel()
-                shape = elem.shape
-                inv_hessian_vector_torch.append(inv_hessian_vector[idx : idx + n].reshape(shape))
-                idx += n
-
-            hessian_vector = self.compute_hessian_vector(inv_hessian_vector_torch, trn_X, trn_y)
         else:
             hessian_vector = 0
 
