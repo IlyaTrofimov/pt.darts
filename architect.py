@@ -13,7 +13,8 @@ class Architect():
             w_momentum: weights momentum
         """
         self.net = net
-        self.v_net = copy.deepcopy(net)
+        if hessian_vector_type != 3:
+            self.v_net = copy.deepcopy(net)
         self.w_momentum = w_momentum
         self.w_weight_decay = w_weight_decay
         self.hessian_vector_type = hessian_vector_type
@@ -109,37 +110,47 @@ class Architect():
                 v_alphas + v_weights,
                 create_graph=False)
 
-            val_grad_a = val_grad[:len(v_alphas)]                    # d_a L_val
-            val_grad_w = flatten(val_grad[len(v_alphas):]).double()  # d_w L_val
+            val_grad_a = val_grad[:len(v_alphas)]           # d_a L_val
+            val_grad_w = flatten(val_grad[len(v_alphas):])  # d_w L_val
 
             # step 2. cg on the train weight-hessian and test weight-grad
-            trn_loss = self.net.loss(trn_X, trn_y)  # L_train(w)
-            trn_grad_w = flatten(torch.autograd.grad(
-                trn_loss,
-                v_weights,
-                create_graph=True)) # d_w L_train(w)
-
             def calc_huge_hessian_vector(z):
+                trn_loss = self.net.loss(trn_X, trn_y)  # L_train(w)
+                trn_grad_w = flatten(torch.autograd.grad(
+                    trn_loss,
+                    v_weights,
+                    create_graph=True)) # d_w L_train(w)
+
+                # the copied backprop thru loss is to allow retain_graph=False
                 return flatten(torch.autograd.grad(
                     trn_grad_w,
                     v_weights,
                     grad_outputs=torch.from_numpy(z).to(trn_grad_w),
-                    retain_graph=True)
+                    retain_graph=False)
                 ).cpu()
 
+            n_weights = sum(map(torch.numel, v_weights))
             LinOp = LinearOperator(
-                (len(trn_grad_w), len(trn_grad_w)),
+                (n_weights, n_weights),
                 matvec=calc_huge_hessian_vector,
-                dtype=np.dtype('float64'))
+                dtype=np.float64)
 
             # why these tol and maxiter?
-            inv_hess_vect, info = cg(LinOp, val_grad_w.cpu().numpy(), tol=1e-3, maxiter=5)
-            inv_hess_vect = torch.from_numpy(inv_hess_vect).to(trn_grad_w)
+            inv_hess_vect, info = cg(LinOp, val_grad_w.cpu().double().numpy(),
+                                     tol=1e-3, maxiter=5)
+            inv_hess_vect = torch.from_numpy(inv_hess_vect).to(val_grad_w)
 
             # step 3. get \nabla^2_{\alpha\omega} L_train(\omega^*(\alpha), \alpha) q
             # Supply `grad()` with `q` as the `grad_outputs` for
             #  the Jacobian-vector product (see grad's docs).
             if True:
+                # notice similarities to `calc_huge_hessian_vector`
+                trn_loss = self.net.loss(trn_X, trn_y)  # L_train(w)
+                trn_grad_w = flatten(torch.autograd.grad(
+                    trn_loss,
+                    v_weights,
+                    create_graph=True)) # d_w L_train(w)
+
                 hessian_vector = torch.autograd.grad(
                     trn_grad_w,
                     v_alphas,
