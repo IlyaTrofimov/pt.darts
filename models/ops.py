@@ -189,10 +189,23 @@ class MixedOp(nn.Module):
             op = OPS[primitive](C, stride, affine=False)
             self._ops.append(op)
 
-    def forward(self, x, weights):
+    def forward(self, x, weights, mask = None):
         """
         Args:
             x: input
             weights: weight for each operation
         """
-        return sum(w * op(x) for w, op in zip(weights, self._ops))
+        if mask is None:
+            return sum(w * op(x) for w, op in zip(weights, self._ops))
+        else:
+            res = 0
+            #print(mask)
+            for w, m, op in zip(weights, mask, self._ops):
+                if not m:
+                    pass
+                    #with torch.no_grad():
+                    #    res += w * m * op(x)
+                else:
+                    res += w * m * op(x)
+
+            return res

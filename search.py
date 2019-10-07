@@ -13,7 +13,6 @@ from visualize import plot
 import genotypes as gt
 from copy import copy
 from scipy.stats import bernoulli
-import random
 
 config = SearchConfig()
 
@@ -143,33 +142,8 @@ def train(train_loader, valid_loader, model, architect, w_optim, alpha_optim, lr
         val_X, val_y = val_X.to(device, non_blocking=True), val_y.to(device, non_blocking=True)
         N = trn_X.size(0)
 
-        #for elem in architect.net.alpha_normal:
-        #    print(elem)
-        #for elem in architect.net.alpha_reduce:
-        #    print(elem)
-
         if config.proxyless:
-            for elem in architect.net.mask_normal:
-                for i in range(elem.shape[0]):
-                    for j in range(elem.shape[1]):
-                        elem[i, j].data.fill_(0)
-
-                j2 = j1 = random.randint(0, elem.shape[1] - 1)
-                while j2 == j1:
-                    j2 = random.randint(0, elem.shape[1] - 1)
-                elem[i, j1].data.fill_(1)
-                elem[i, j2].data.fill_(1)
-
-            for elem in architect.net.mask_reduce:
-                for i in range(elem.shape[0]):
-                    for j in range(elem.shape[1]):
-                        elem[i, j].data.fill_(0)
-
-                j2 = j1 = random.randint(0, elem.shape[1] - 1)
-                while j2 == j1:
-                    j2 = random.randint(0, elem.shape[1] - 1)
-                elem[i, j1].data.fill_(1)
-                elem[i, j2].data.fill_(1)
+            architect.net.randomize_mask()
 
         # phase 2. architect step (alpha)
         alpha_optim.zero_grad()
@@ -190,6 +164,14 @@ def train(train_loader, valid_loader, model, architect, w_optim, alpha_optim, lr
         # gradient clipping
         nn.utils.clip_grad_norm_(model.weights(), config.w_grad_clip)
         w_optim.step()
+
+        #print('AAAAAAAAAAA')
+        #print('AAAAAAAAAAA')
+        #
+        #for elem in model.mask_normal:
+        #    print(elem)
+        #for elem in model.mask_reduce:
+        #    print(elem)
 
         prec1, prec5 = utils.accuracy(logits, trn_y, topk=(1, 5))
         losses.update(loss.item(), N)

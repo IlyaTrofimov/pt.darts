@@ -3,6 +3,7 @@ import copy
 import torch
 from scipy.sparse.linalg import cg, LinearOperator
 import numpy as np
+import random
 
 class Architect():
     """ Compute gradients of alphas """
@@ -13,7 +14,7 @@ class Architect():
             w_momentum: weights momentum
         """
         self.net = net
-        if hessian_vector_type != 3:
+        if hessian_vector_type not in [0, 3]:
             self.v_net = copy.deepcopy(net)
         self.w_momentum = w_momentum
         self.w_weight_decay = w_weight_decay
@@ -33,11 +34,15 @@ class Architect():
             xi: learning rate for virtual gradient step (same as weights lr)
             w_optim: weights optimizer
         """
+
+        self.v_net.mask_normal = copy.copy(self.net.mask_normal)
+        self.v_net.mask_reduce = copy.copy(self.net.mask_reduce)
+
         # forward & calc loss
         loss = self.net.loss(trn_X, trn_y) # L_trn(w)
 
         # compute gradient
-        gradients = torch.autograd.grad(loss, self.net.weights())
+        gradients = torch.autograd.grad(loss, self.net.weights(), allow_unused = True)
 
         # do virtual step (update gradient)
         # below operations do not need gradient tracking
@@ -46,6 +51,8 @@ class Architect():
             # be iterated also.
             for w, vw, g in zip(self.net.weights(), self.v_net.weights(), gradients):
                 m = w_optim.state[w].get('momentum_buffer', 0.) * self.w_momentum
+                if g is None:
+                    g = 0.0
                 vw.copy_(w - xi * (m + g + self.w_weight_decay*w))
 
             # synchronize alphas
@@ -60,10 +67,17 @@ class Architect():
         """
         # compute gradient
 
-        # def ddot(a, b):
-        #    return sum(u.flatten() @ v.flatten() for u, v in zip(a, b))
+        if self.hessian_vector_type == 0:
+            # calc unrolled loss
+            val_loss = self.net.loss(val_X, val_y) # L_val(w)
 
-        if self.hessian_vector_type in [0, 1, 2]:
+            v_alphas = tuple(self.net.alphas())
+            v_weights = tuple(self.net.weights())
+            v_grads = torch.autograd.grad(val_loss, v_alphas + v_weights, allow_unused = True)
+            dalpha = v_grads[:len(v_alphas)] # d_a L_val(w')
+            dw = v_grads[len(v_alphas):]     # d_w L_val(w')
+
+        elif self.hessian_vector_type in [1, 2]:
             # do virtual step (calc w`)
             self.virtual_step(trn_X, trn_y, xi, w_optim)
 
@@ -72,7 +86,7 @@ class Architect():
 
             v_alphas = tuple(self.v_net.alphas())
             v_weights = tuple(self.v_net.weights())
-            v_grads = torch.autograd.grad(val_loss, v_alphas + v_weights)
+            v_grads = torch.autograd.grad(val_loss, v_alphas + v_weights, allow_unused = True)
             dalpha = v_grads[:len(v_alphas)] # d_a L_val(w')
             dw = v_grads[len(v_alphas):]     # d_w L_val(w')
 

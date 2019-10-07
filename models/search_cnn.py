@@ -6,7 +6,7 @@ from models.search_cells import SearchCell
 import genotypes as gt
 from torch.nn.parallel._functions import Broadcast
 import logging
-
+import random
 
 def broadcast_list(l, device_ids):
     """ Broadcasting list """
@@ -124,6 +124,31 @@ class SearchCNNController(nn.Module):
 
 
         self.net = SearchCNN(C_in, C, n_classes, n_layers, n_nodes, stem_multiplier)
+
+    def randomize_mask(self):
+            for elem in self.mask_normal:
+                for i in range(elem.shape[0]):
+                    for j in range(elem.shape[1]):
+                        elem[i, j].data.fill_(0)
+
+                    j2 = j1 = random.randint(0, elem.shape[1] - 1)
+                    while j2 == j1:
+                        j2 = random.randint(0, elem.shape[1] - 1)
+
+                    elem[i, j1].data.fill_(1)
+                    elem[i, j2].data.fill_(1)
+
+            for elem in self.mask_reduce:
+                for i in range(elem.shape[0]):
+                    for j in range(elem.shape[1]):
+                        elem[i, j].data.fill_(0)
+
+                    j2 = j1 = random.randint(0, elem.shape[1] - 1)
+                    while j2 == j1:
+                        j2 = random.randint(0, elem.shape[1] - 1)
+
+                    elem[i, j1].data.fill_(1)
+                    elem[i, j2].data.fill_(1)
 
     def forward(self, x):
         weights_normal = [F.softmax(alpha*m, dim=-1) for alpha,m in zip(self.alpha_normal, self.mask_normal)]

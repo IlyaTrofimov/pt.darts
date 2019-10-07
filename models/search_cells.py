@@ -52,9 +52,8 @@ class SearchCell(nn.Module):
                 states.append(s_cur)
         else:
             for edges, w_list, amask in zip(self.dag, w_dag, mask):
-                s_cur = sum(edges[i](s, w * m) for i, (s, w, m) in enumerate(zip(states, w_list, amask)))
+                s_cur = sum(edges[i](s, w, m) for i, (s, w, m) in enumerate(zip(states, w_list, amask)))
                 states.append(s_cur)
-
 
         s_out = torch.cat(states[2:], dim=1)
         return s_out
