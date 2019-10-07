@@ -149,27 +149,27 @@ def train(train_loader, valid_loader, model, architect, w_optim, alpha_optim, lr
         #    print(elem)
 
         if config.proxyless:
-           for elem in architect.net.mask_normal:
+            for elem in architect.net.mask_normal:
                 for i in range(elem.shape[0]):
                     for j in range(elem.shape[1]):
                         elem[i, j].data.fill_(0)
 
-                  j2 = j1 = random.randint(0, elem.shape[1] - 1)
-                  while j2 == j1:
-                        j2 = random.randint(0, elem.shape[1] - 1)
-                  elem[i, j1].data.fill_(1)
-                  elem[i, j2].data.fill_(1)
+                j2 = j1 = random.randint(0, elem.shape[1] - 1)
+                while j2 == j1:
+                    j2 = random.randint(0, elem.shape[1] - 1)
+                elem[i, j1].data.fill_(1)
+                elem[i, j2].data.fill_(1)
 
-           for elem in architect.net.mask_reduce:
+            for elem in architect.net.mask_reduce:
                 for i in range(elem.shape[0]):
                     for j in range(elem.shape[1]):
                         elem[i, j].data.fill_(0)
 
-                    j2 = j1 = random.randint(0, elem.shape[1] - 1)
-                    while j2 == j1:
-                        j2 = random.randint(0, elem.shape[1] - 1)
-                    elem[i, j1].data.fill_(1)
-                    elem[i, j2].data.fill_(1)
+                j2 = j1 = random.randint(0, elem.shape[1] - 1)
+                while j2 == j1:
+                    j2 = random.randint(0, elem.shape[1] - 1)
+                elem[i, j1].data.fill_(1)
+                elem[i, j2].data.fill_(1)
 
         # phase 2. architect step (alpha)
         alpha_optim.zero_grad()
