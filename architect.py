@@ -76,6 +76,12 @@ class Architect():
             dalpha = v_grads[:len(v_alphas)] # d_a L_val(w')
             dw = v_grads[len(v_alphas):]     # d_w L_val(w')
 
+        #for elem in self.net.alphas():
+        #    print(elem)
+        #
+        #for elem in self.net._masks:
+        #    print(elem)
+
         #
         # DARTS
         #

@@ -40,14 +40,21 @@ class SearchCell(nn.Module):
                 op = ops.MixedOp(C, stride)
                 self.dag[i].append(op)
 
-    def forward(self, s0, s1, w_dag):
+    def forward(self, s0, s1, w_dag, mask = None):
         s0 = self.preproc0(s0)
         s1 = self.preproc1(s1)
 
         states = [s0, s1]
-        for edges, w_list in zip(self.dag, w_dag):
-            s_cur = sum(edges[i](s, w) for i, (s, w) in enumerate(zip(states, w_list)))
-            states.append(s_cur)
+
+        if mask is None:
+            for edges, w_list in zip(self.dag, w_dag):
+                s_cur = sum(edges[i](s, w) for i, (s, w) in enumerate(zip(states, w_list)))
+                states.append(s_cur)
+        else:
+            for edges, w_list, amask in zip(self.dag, w_dag, mask):
+                s_cur = sum(edges[i](s, w * m) for i, (s, w, m) in enumerate(zip(states, w_list, amask)))
+                states.append(s_cur)
+
 
         s_out = torch.cat(states[2:], dim=1)
         return s_out

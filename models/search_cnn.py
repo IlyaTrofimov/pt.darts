@@ -63,12 +63,13 @@ class SearchCNN(nn.Module):
         self.gap = nn.AdaptiveAvgPool2d(1)
         self.linear = nn.Linear(C_p, n_classes)
 
-    def forward(self, x, weights_normal, weights_reduce):
+    def forward(self, x, weights_normal, weights_reduce, mask_normal, mask_reduce):
         s0 = s1 = self.stem(x)
 
         for cell in self.cells:
             weights = weights_reduce if cell.reduction else weights_normal
-            s0, s1 = s1, cell(s0, s1, weights)
+            mask = mask_reduce if cell.reduction else mask_normal
+            s0, s1 = s1, cell(s0, s1, weights, mask)
 
         out = self.gap(s1)
         out = out.view(out.size(0), -1) # flatten
@@ -93,9 +94,21 @@ class SearchCNNController(nn.Module):
         self.alpha_normal = nn.ParameterList()
         self.alpha_reduce = nn.ParameterList()
 
+        self.mask_normal = nn.ParameterList()
+        self.mask_reduce = nn.ParameterList()
+
+        self.policy_normal = nn.ParameterList()
+        self.policy_reduce = nn.ParameterList()
+
         for i in range(n_nodes):
             self.alpha_normal.append(nn.Parameter(1e-3*torch.randn(i+2, n_ops)))
             self.alpha_reduce.append(nn.Parameter(1e-3*torch.randn(i+2, n_ops)))
+
+            self.mask_normal.append(nn.Parameter(torch.ones(i+2, n_ops)))
+            self.mask_reduce.append(nn.Parameter(torch.ones(i+2, n_ops)))
+
+            self.policy_normal.append(nn.Parameter(torch.ones(i+2, n_ops) / n_ops))
+            self.policy_reduce.append(nn.Parameter(torch.ones(i+2, n_ops) / n_ops))
 
         # setup alphas list
         self._alphas = []
@@ -103,14 +116,21 @@ class SearchCNNController(nn.Module):
             if 'alpha' in n:
                 self._alphas.append((n, p))
 
+        # setup alphas list
+        self._masks = []
+        for n, p in self.named_parameters():
+            if 'mask_' in n:
+                self._masks.append((n, p))
+
+
         self.net = SearchCNN(C_in, C, n_classes, n_layers, n_nodes, stem_multiplier)
 
     def forward(self, x):
-        weights_normal = [F.softmax(alpha, dim=-1) for alpha in self.alpha_normal]
-        weights_reduce = [F.softmax(alpha, dim=-1) for alpha in self.alpha_reduce]
+        weights_normal = [F.softmax(alpha*m, dim=-1) for alpha,m in zip(self.alpha_normal, self.mask_normal)]
+        weights_reduce = [F.softmax(alpha*m, dim=-1) for alpha,m in zip(self.alpha_reduce, self.mask_reduce)]
 
         if len(self.device_ids) == 1:
-            return self.net(x, weights_normal, weights_reduce)
+            return self.net(x, weights_normal, weights_reduce, self.mask_normal, self.mask_reduce)
 
         # scatter x
         xs = nn.parallel.scatter(x, self.device_ids)
