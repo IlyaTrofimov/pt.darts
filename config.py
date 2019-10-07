@@ -67,6 +67,7 @@ class SearchConfig(BaseConfig):
         parser.add_argument('--hv_type', type=int, default=1, help='')
         parser.add_argument('--multi_avg_rank', type=int, default=0, help='')
         parser.add_argument('--multi_avg_size', type=int, default=0, help='')
+        parser.add_argument('--proxyless', action = "store_true", help='')
 
         return parser
 
