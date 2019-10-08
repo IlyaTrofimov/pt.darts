@@ -7,6 +7,8 @@ import genotypes as gt
 from torch.nn.parallel._functions import Broadcast
 import logging
 import random
+import numpy as np
+import copy
 
 def broadcast_list(l, device_ids):
     """ Broadcasting list """
@@ -126,29 +128,20 @@ class SearchCNNController(nn.Module):
         self.net = SearchCNN(C_in, C, n_classes, n_layers, n_nodes, stem_multiplier)
 
     def randomize_mask(self):
-            for elem in self.mask_normal:
-                for i in range(elem.shape[0]):
-                    for j in range(elem.shape[1]):
-                        elem[i, j].data.fill_(0)
 
-                    j2 = j1 = random.randint(0, elem.shape[1] - 1)
-                    while j2 == j1:
-                        j2 = random.randint(0, elem.shape[1] - 1)
+        def get_random_mask(alpha, mask):
+            for a, m in zip(alpha, mask):
+                for i in range(a.shape[0]):
+                    A = np.random.multinomial(1, torch.softmax(a[i].detach().cpu(), dim = -1), size = 1)
+                    B = copy.copy(A)
 
-                    elem[i, j1].data.fill_(1)
-                    elem[i, j2].data.fill_(1)
+                    while np.array_equal(A, B):
+                        B = np.random.multinomial(1, torch.softmax(a[i].detach().cpu(), dim = -1), size = 1)
 
-            for elem in self.mask_reduce:
-                for i in range(elem.shape[0]):
-                    for j in range(elem.shape[1]):
-                        elem[i, j].data.fill_(0)
+                    m.data[i:].copy_(torch.Tensor(A + B))
 
-                    j2 = j1 = random.randint(0, elem.shape[1] - 1)
-                    while j2 == j1:
-                        j2 = random.randint(0, elem.shape[1] - 1)
-
-                    elem[i, j1].data.fill_(1)
-                    elem[i, j2].data.fill_(1)
+        get_random_mask(self.alpha_normal, self.mask_normal)
+        get_random_mask(self.alpha_reduce, self.mask_reduce)
 
     def forward(self, x):
         weights_normal = [F.softmax(alpha*m, dim=-1) for alpha,m in zip(self.alpha_normal, self.mask_normal)]
