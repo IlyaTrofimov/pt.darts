@@ -82,13 +82,14 @@ class SearchCNN(nn.Module):
 class SearchCNNController(nn.Module):
     """ SearchCNN controller supporting multi-gpu """
     def __init__(self, C_in, C, n_classes, n_layers, criterion, n_nodes=4, stem_multiplier=3,
-                 device_ids=None):
+                 device_ids=None, proxyless = False):
         super().__init__()
         self.n_nodes = n_nodes
         self.criterion = criterion
         if device_ids is None:
             device_ids = list(range(torch.cuda.device_count()))
         self.device_ids = device_ids
+        self.proxyless = proxyless
 
         # initialize architect parameters: alphas
         n_ops = len(gt.PRIMITIVES)
@@ -144,8 +145,16 @@ class SearchCNNController(nn.Module):
         get_random_mask(self.alpha_reduce, self.mask_reduce)
 
     def forward(self, x):
-        weights_normal = [F.softmax(alpha*m, dim=-1) for alpha,m in zip(self.alpha_normal, self.mask_normal)]
-        weights_reduce = [F.softmax(alpha*m, dim=-1) for alpha,m in zip(self.alpha_reduce, self.mask_reduce)]
+
+        if not self.proxyless:
+            weights_normal = [F.softmax(alpha, dim=-1) for alpha in self.alpha_normal]
+            weights_reduce = [F.softmax(alpha, dim=-1) for alpha in self.alpha_reduce]
+        else:
+            weights_normal = [torch.exp(alpha) for alpha in self.alpha_normal]
+            weights_reduce = [torch.exp(alpha) for alpha in self.alpha_reduce]
+
+        #weights_normal = [F.softmax(alpha*m, dim=-1) for alpha,m in zip(self.alpha_normal, self.mask_normal)]
+        #weights_reduce = [F.softmax(alpha*m, dim=-1) for alpha,m in zip(self.alpha_reduce, self.mask_reduce)]
 
         if len(self.device_ids) == 1:
             return self.net(x, weights_normal, weights_reduce, self.mask_normal, self.mask_reduce)

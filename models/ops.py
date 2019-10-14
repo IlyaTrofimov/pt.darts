@@ -195,17 +195,27 @@ class MixedOp(nn.Module):
             x: input
             weights: weight for each operation
         """
+
         if mask is None:
-            return sum(w * op(x) for w, op in zip(weights, self._ops))
+            return sum(w * op(x) for w, op in zip(weights, self._ops)) # vanila DARTS
         else:
             res = 0
-            #print(mask)
-            for w, m, op in zip(weights, mask, self._ops):
-                if not m:
-                    pass
-                    #with torch.no_grad():
-                    #    res += w * m * op(x)
-                else:
-                    res += w * m * op(x)
+            non_zero_cnt = 0
+            w_sum = 0
+            w_sum_nonzero = 0
+            all_sum = 0
 
-            return res
+            for w, m, op in zip(weights, mask, self._ops):
+                if  m:
+                    res += w * m * op(x)
+                    w_sum += w
+
+                    all_sum += w.detach()
+                    if not isinstance(op, Zero):
+                        w_sum_nonzero += w.detach()
+
+
+            part_nonzero = w_sum_nonzero / all_sum
+            part_nonzero = 1
+
+            return res / w_sum / part_nonzero

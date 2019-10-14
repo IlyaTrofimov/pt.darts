@@ -42,6 +42,9 @@ def main():
     if config.ops_set == 2:
         gt.PRIMITIVES = gt.PRIMITIVES2
 
+    if config.ops_set == 3:
+        gt.PRIMITIVES = gt.PRIMITIVES_NO_SKIP
+
     criterion = nn.CrossEntropyLoss().to(device)
     use_aux = config.aux_weight > 0.
     model = AugmentCNN(input_size, input_channels, config.init_channels, n_classes, config.layers,

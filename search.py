@@ -51,13 +51,16 @@ def main():
     if config.ops_set == 2:
         gt.PRIMITIVES = gt.PRIMITIVES2
 
+    if config.ops_set == 3:
+        gt.PRIMITIVES = gt.PRIMITIVES_NO_SKIP
+
     """ Initialize the distributed environment. """
     if config.multi_avg_size > 0:
         init_processes(config.multi_avg_rank, config.multi_avg_size, backend='Gloo')
 
     net_crit = nn.CrossEntropyLoss().to(device)
     model = SearchCNNController(input_channels, config.init_channels, n_classes, config.layers,
-                                net_crit, n_nodes = config.n_nodes, device_ids=config.gpus)
+                                net_crit, n_nodes = config.n_nodes, device_ids=config.gpus, proxyless = config.proxyless)
     model = model.to(device)
 
     # weights optimizer
@@ -144,6 +147,9 @@ def train(train_loader, valid_loader, model, architect, w_optim, alpha_optim, lr
 
         if config.proxyless:
             architect.net.randomize_mask()
+        else:
+            architect.net.mask_normal = None
+            architect.net.mask_reduce = None
 
         # phase 2. architect step (alpha)
         alpha_optim.zero_grad()
@@ -156,6 +162,9 @@ def train(train_loader, valid_loader, model, architect, w_optim, alpha_optim, lr
                 elem.data = elem.data / config.multi_avg_size
             logger.info(f"step = {step}, REDUCE OK")
 
+        if config.sbp:
+            architect.net.randomize_mask()
+
         # phase 1. child network step (w)
         w_optim.zero_grad()
         logits = model(trn_X)
@@ -164,14 +173,6 @@ def train(train_loader, valid_loader, model, architect, w_optim, alpha_optim, lr
         # gradient clipping
         nn.utils.clip_grad_norm_(model.weights(), config.w_grad_clip)
         w_optim.step()
-
-        #print('AAAAAAAAAAA')
-        #print('AAAAAAAAAAA')
-        #
-        #for elem in model.mask_normal:
-        #    print(elem)
-        #for elem in model.mask_reduce:
-        #    print(elem)
 
         prec1, prec5 = utils.accuracy(logits, trn_y, topk=(1, 5))
         losses.update(loss.item(), N)
