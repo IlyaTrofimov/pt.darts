@@ -132,7 +132,7 @@ class SearchCNNController(nn.Module):
 
         def get_random_mask(alpha, mask):
             for a, m in zip(alpha, mask):
-                for i in range(a.shape[0]):
+                for i in range(a.shape[0] - 1):
                     A = np.random.multinomial(1, torch.softmax(a[i].detach().cpu(), dim = -1), size = 1)
                     B = copy.copy(A)
 
