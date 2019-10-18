@@ -146,7 +146,7 @@ def train(train_loader, valid_loader, model, architect, w_optim, alpha_optim, lr
         N = trn_X.size(0)
 
         if config.proxyless:
-            architect.net.randomize_mask()
+            architect.net.randomize_mask(config.az)
 
             if config.az:
                 for t in architect.net.mask_normal:

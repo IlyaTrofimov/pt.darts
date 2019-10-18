@@ -128,11 +128,14 @@ class SearchCNNController(nn.Module):
 
         self.net = SearchCNN(C_in, C, n_classes, n_layers, n_nodes, stem_multiplier)
 
-    def randomize_mask(self):
+    def randomize_mask(self, az = False):
 
         def get_random_mask(alpha, mask):
             for a, m in zip(alpha, mask):
-                for i in range(a.shape[0] - 1):
+
+                N = a.shape[0] - 1 if az else a.shape[0]
+
+                for i in range(N):
                     A = np.random.multinomial(1, torch.softmax(a[i].detach().cpu(), dim = -1), size = 1)
                     B = copy.copy(A)
 
