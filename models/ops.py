@@ -199,23 +199,27 @@ class MixedOp(nn.Module):
         if mask is None:
             return sum(w * op(x) for w, op in zip(weights, self._ops)) # vanila DARTS
         else:
+
+            w_nz = 0.0
+            w_mask_nz = 0.0
+
+            for w, m, op in zip(weights, mask, self._ops):
+                if not isinstance(op, Zero):
+                    w_nz += w.detach()
+                    if m:
+                        w_mask_nz += w.detach()
+
             res = 0
-            non_zero_cnt = 0
             w_sum = 0
-            w_sum_nonzero = 0
-            all_sum = 0
 
             for w, m, op in zip(weights, mask, self._ops):
                 if  m:
-                    res += w * m * op(x)
-                    w_sum += w
+                    if isinstance(op, Zero) or not gt.smart_sample:
+                        c = 1
+                    else:
+                        c = w_nz / w_mask_nz
 
-                    all_sum += w.detach()
-                    if not isinstance(op, Zero):
-                        w_sum_nonzero += w.detach()
+                    res += c * w * m * op(x)
+                    w_sum += c * w
 
-
-            part_nonzero = w_sum_nonzero / all_sum
-            part_nonzero = 1
-
-            return res / w_sum / part_nonzero
+            return res / w_sum

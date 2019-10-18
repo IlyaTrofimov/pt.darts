@@ -70,6 +70,7 @@ class SearchConfig(BaseConfig):
         parser.add_argument('--proxyless', action = "store_true", help='')
         parser.add_argument('--sbp', action = "store_true", help='')
         parser.add_argument('--az', action = "store_true", help='')
+        parser.add_argument('--smart_sample', action = "store_true", help='')
 
         return parser
 

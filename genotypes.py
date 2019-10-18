@@ -40,6 +40,8 @@ PRIMITIVES2 = [
     'none'
 ]
 
+smart_sample = False
+
 def to_dag(C_in, gene, reduction):
     """ generate discrete ops from gene """
     dag = nn.ModuleList()

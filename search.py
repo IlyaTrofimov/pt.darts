@@ -54,6 +54,9 @@ def main():
     if config.ops_set == 3:
         gt.PRIMITIVES = gt.PRIMITIVES_NO_SKIP
 
+    if config.smart_sample:
+        gt.smart_sample = True
+
     """ Initialize the distributed environment. """
     if config.multi_avg_size > 0:
         init_processes(config.multi_avg_rank, config.multi_avg_size, backend='Gloo')
