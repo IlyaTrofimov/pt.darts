@@ -29,9 +29,17 @@ class Cutout(object):
 
 def data_transforms(dataset, cutout_length):
     dataset = dataset.lower()
-    if dataset == 'cifar10' or dataset == 'cifar100':
+
+    if dataset == 'cifar10':
         MEAN = [0.49139968, 0.48215827, 0.44653124]
         STD = [0.24703233, 0.24348505, 0.26158768]
+        transf = [
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip()
+        ]
+    elif dataset == 'cifar100':
+        MEAN = [0.50707516, 0.48654887, 0.44091784]
+        STD = [0.26733429, 0.25643846, 0.27615047]
         transf = [
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip()
